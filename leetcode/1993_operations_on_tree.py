@@ -6,7 +6,6 @@ class Node:
         self.locking_user = locking_user
         self.children: Set[Node] = set()
         self.parent = parent
-        self.dirty_descendants = 0
             
     def add_child(self, node):
         self.children.add(node)
@@ -34,34 +33,17 @@ class LockingTree:
                 self.nodes[parent_idx].add_child(node)
 
     def lock(self, num: int, user: int) -> bool:
-        if self.nodes[num].locking_user:
-            return False
+        if not self.nodes[num].locking_user:
+            self.nodes[num].locking_user = user
+            return True
+        return False
         
-        
-        self.nodes[num].locking_user = user
-        
-        # increments ancestors' dirty descendants
-        parent = self.nodes[num].parent
-        while parent != -1:
-            parent_node = self.nodes[parent]
-            parent_node.dirty_descendants += 1
-            parent = parent_node.parent
-            
-        return True        
 
     def unlock(self, num: int, user: int) -> bool:
-        if self.nodes[num].locking_user != user:
-            return False
-        self.nodes[num].locking_user = None
-    
-            # increments ancestors' dirty descendants
-        parent = self.nodes[num].parent
-        while parent != -1:
-            parent_node = self.nodes[parent]
-            parent_node.dirty_descendants -= 1
-            parent = parent_node.parent
-
-        return True
+        if self.nodes[num].locking_user == user:
+            self.nodes[num].locking_user = None
+            return True
+        return False
         
 
     def upgrade(self, num: int, user: int) -> bool:
@@ -77,24 +59,25 @@ class LockingTree:
                 return False
             parent = parent_node.parent
         
-        # If at least one locked descendant, execute op
-        if self.nodes[num].dirty_descendants == 0:
-            return False
-        
+        # If at least one locked descedant, execute op
+        upgrade = False
         descenandats_queue = queue.Queue()
         for child in self.nodes[num].children:
             descenandats_queue.put(child)
             
         while not descenandats_queue.empty():
             descenandat = descenandats_queue.get()
-
-            descenandat.locking_user = None
+            # condition satisifed
+            if descenandat.locking_user:
+                descenandat.locking_user = None
+                upgrade = True
                 
             for child in descenandat.children:
                 descenandats_queue.put(child)
         
-        self.nodes[num].locking_user = user
-        return True
+        if upgrade:
+            self.nodes[num].locking_user = user
+        return upgrade
                             
 
         
@@ -107,3 +90,7 @@ class LockingTree:
 # param_2 = obj.unlock(num,user)
 # param_3 = obj.upgrade(num,user)
 
+
+# ٍsave user name to lock
+# Save lock state
+# hash value for descenants
