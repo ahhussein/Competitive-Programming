@@ -6,7 +6,7 @@ class Node:
         self.locking_user = locking_user
         self.children: Set[Node] = set()
         self.parent = parent
-        self.dirty_descendants = set()
+        self.dirty_descendants = 0
             
     def add_child(self, node):
         self.children.add(node)
@@ -44,14 +44,13 @@ class LockingTree:
         parent = self.nodes[num].parent
         while parent != -1:
             parent_node = self.nodes[parent]
-            parent_node.dirty_descendants.add(num)
+            parent_node.dirty_descendants += 1
             parent = parent_node.parent
             
         return True        
 
     def unlock(self, num: int, user: int) -> bool:
-        # -1 serves as super user
-        if self.nodes[num].locking_user != user and user != -1:
+        if self.nodes[num].locking_user != user:
             return False
         self.nodes[num].locking_user = None
     
@@ -59,7 +58,7 @@ class LockingTree:
         parent = self.nodes[num].parent
         while parent != -1:
             parent_node = self.nodes[parent]
-            parent_node.dirty_descendants.remove(num)
+            parent_node.dirty_descendants -= 1
             parent = parent_node.parent
 
         return True
@@ -79,14 +78,22 @@ class LockingTree:
             parent = parent_node.parent
         
         # If at least one locked descendant, execute op
-        if not self.nodes[num].dirty_descendants:
+        if self.nodes[num].dirty_descendants == 0:
             return False
         
-        dirty_descendants = set(self.nodes[num].dirty_descendants)
-        for descendant_idx in dirty_descendants:
-            self.unlock(descendant_idx, -1)
+        descenandats_queue = queue.Queue()
+        for child in self.nodes[num].children:
+            descenandats_queue.put(child)
             
-        self.lock(num, user)
+        while not descenandats_queue.empty():
+            descenandat = descenandats_queue.get()
+
+            descenandat.locking_user = None
+                
+            for child in descenandat.children:
+                descenandats_queue.put(child)
+        
+        self.nodes[num].locking_user = user
         return True
                             
 
