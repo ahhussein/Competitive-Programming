@@ -1,38 +1,102 @@
+import queue
+
+class Node:
+    def __init__(self, node_idx: int, parent: int, locking_user: Optional[int] = None):
+        self.node_idx = node_idx
+        self.locking_user = locking_user
+        self.children: Set[Node] = set()
+        self.parent = parent
+        self.dirty_descendants = set()
+            
+    def add_child(self, node):
+        self.children.add(node)
+        
+    def __eq__(self, other):
+        if isinstance(other, Item):
+            return (self.node_idx == other.node_idx) 
+        else:
+            return False
+        
+    def __hash__(self):
+        return hash(self.node_idx)
+    
+    
 class LockingTree:
 
     def __init__(self, parent: List[int]):
-        self.parent = parent
-        self.tree = [[] for _ in parent]
-        for i, x in enumerate(parent): 
-            if x != -1: self.tree[x].append(i)
-        self.locked = {}
+        self.nodes = []
+        for idx, parent_idx in enumerate(parent):
+            self.nodes.append(Node(idx, parent_idx))
+        
+        for idx, parent_idx in enumerate(parent):
+            node = self.nodes[idx]
+            if parent_idx != -1:
+                self.nodes[parent_idx].add_child(node)
 
     def lock(self, num: int, user: int) -> bool:
-        if num in self.locked: return False 
-        self.locked[num] = user
-        return True 
+        if self.nodes[num].locking_user:
+            return False
+        
+        
+        self.nodes[num].locking_user = user
+        
+        # increments ancestors' dirty descendants
+        parent = self.nodes[num].parent
+        while parent != -1:
+            parent_node = self.nodes[parent]
+            parent_node.dirty_descendants.add(num)
+            parent = parent_node.parent
+            
+        return True        
 
     def unlock(self, num: int, user: int) -> bool:
-        if self.locked.get(num) != user: return False 
-        self.locked.pop(num)
-        return True 
+        # -1 serves as super user
+        if self.nodes[num].locking_user != user and user != -1:
+            return False
+        self.nodes[num].locking_user = None
+    
+            # increments ancestors' dirty descendants
+        parent = self.nodes[num].parent
+        while parent != -1:
+            parent_node = self.nodes[parent]
+            parent_node.dirty_descendants.remove(num)
+            parent = parent_node.parent
+
+        return True
+        
 
     def upgrade(self, num: int, user: int) -> bool:
-        if num in self.locked: return False # check for unlocked
+        # If locked, reject op
+        if self.nodes[num].locking_user:
+            return False
         
-        node = num
-        while node != -1: 
-            if node in self.locked: break # locked ancestor
-            node = self.parent[node]
-        else: 
-            stack = [num]
-            descendant = []
-            while stack: 
-                node = stack.pop()
-                if node in self.locked: descendant.append(node)
-                for child in self.tree[node]: stack.append(child)
-            if descendant: 
-                self.locked[num] = user # lock given node 
-                for node in descendant: self.locked.pop(node) # unlock all descendants
-                return True 
-        return False # locked ancestor 
+        # If at least one locked ancestor, reject op
+        parent = self.nodes[num].parent
+        while parent != -1:
+            parent_node = self.nodes[parent]
+            if parent_node.locking_user:
+                return False
+            parent = parent_node.parent
+        
+        # If at least one locked descendant, execute op
+        if not self.nodes[num].dirty_descendants:
+            return False
+        
+        dirty_descendants = set(self.nodes[num].dirty_descendants)
+        for descendant_idx in dirty_descendants:
+            self.unlock(descendant_idx, -1)
+            
+        self.lock(num, user)
+        return True
+                            
+
+        
+        
+
+
+# Your LockingTree object will be instantiated and called as such:
+# obj = LockingTree(parent)
+# param_1 = obj.lock(num,user)
+# param_2 = obj.unlock(num,user)
+# param_3 = obj.upgrade(num,user)
+
