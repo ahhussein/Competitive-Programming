@@ -37,8 +37,7 @@ class Solution:
         
         if not actions_taken_children or "keep" in actions_taken_children:
             return "keep"
-        
-        if "delete" in actions_taken_children:
+        else:
             return "delete"
         
             
